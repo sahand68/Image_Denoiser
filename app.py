@@ -1,86 +1,89 @@
-#our web app framework!
-
-#you could also generate a skeleton from scratch via
-#http://flask-appbuilder.readthedocs.io/en/latest/installation.html
-
-#Generating HTML from within Python is not fun, and actually pretty cumbersome because you have to do the
-#HTML escaping on your own to keep the application secure. Because of that Flask configures the Jinja2 template engine 
-#for you automatically.
-#requests are objects that flask handles (get set post, etc)
-from flask import Flask, render_template,request
-#scientific computing library for saving, reading, and resizing images
-#for matrix math
-import numpy as np
-#for importing our keras model
-import keras.models
-#for regular expressions, saves time dealing with string data
-import re
-import cv2
-#system level operations (like loading files)
-import sys 
-#for reading operating system data
+from __future__ import division, print_function
+# coding=utf-8
+import sys
 import os
-#tell our app where our saved model is
-sys.path.append(os.path.abspath("./model"))
-from load import * 
-#initalize our flask app
+import glob
+import re
+import numpy as np
+import cv2
+
+# Keras
+from keras.applications.imagenet_utils import preprocess_input, decode_predictions
+from keras.models import load_model
+from keras.preprocessing import image
+
+# Flask utils
+from flask import Flask, redirect, url_for, request, render_template, send_file
+from werkzeug.utils import secure_filename
+from gevent.pywsgi import WSGIServer
+
+# Define a flask app
 app = Flask(__name__)
-#global vars for easy reusability
-global model, graph
-#initialize these variables
-model, graph = init()
 
-#decoding an image from base64 into raw representation
-def convertImage(imgData1):
-	cv2.imwrite('output.png',imgData1)
-	#print(imgstr)
-	
+# Model saved with Keras model.save()
+MODEL_PATH = 'models/model.h5'
 
-@app.route('/')
+# Load the trained model
+model = load_model(MODEL_PATH)
+model._make_predict_function()          # Necessary
+print('Model loaded. Start serving...')
+
+
+def model_predict(img_path, model):
+    print(img_path)
+    img = cv2.imread(img_path, 0)
+    img = cv2.resize(img, (152, 632))
+    img = img.astype(np.float32) / 255.0
+    img = img[None]
+    img = img[...,None]
+    preds = model.predict(img)[0][...,0]
+    preds = (255*preds).astype(np.uint8)
+    return preds
+
+
+@app.route('/', methods=['GET'])
 def index():
-	#initModel()
-	#render out pre-built HTML file right on the index page
-	return render_template("index.html")
+    # Main page
+    return render_template('index.html')
 
-@app.route('/predict/',methods=['GET','POST'])
-def predict():
-	#whenever the predict method is called, we're going
-	#to input the user drawn character as an image into the model
-	#perform inference, and return the classification
-	#get the raw data format of the image
-	imgData = request.get_data()
-	#encode it into a suitable format
-	convertImage(imgData)
-	
-	#read the image into memory
-	x = cv2.imread('output.png',0)
-	x=cv2.resize(x,(0,0),fx = 0.25, fy = 0.25)
-	x = cv2.cvtColor(x, cv2.COLOR_BGR2GRAY)
-	x = x.astype('float32')/255
-	newX,newY = x.shape[0], x.shape[1]  
-	#compute a bit-wise inversion so black becomes white and vice versa
-	x = np.reshape(1,newX,newY, 1)
-	x = np.clip(x, 0.,1.)
-	#make it the right size
-	#imshow(x)
-	#convert to a 4D tensor to feed into our model
 
-	
-	#in our computation graph
-	with graph.as_default():
-		#perform the prediction
-		out = model.predict(x)
-		out = np.concatonate(out)
-		out= np.vstack([np.hstack(i) for i in out])
-		plt.imshow(x, cmap= 'gray')
-		
-		return 
-	
+@app.route('/predict', methods=['GET', 'POST'])
+def upload():
+    if request.method == 'POST':
+        # Get the file from post request
+        f = request.files['file']
 
-if __name__ == "__main__":
-	#decide what port to run the app in
-	port = int(os.environ.get('PORT', 5000))
-	#run the app locally on the givn port
-	app.run(host='0.0.0.0', port=port)
-	#optional if we want to run in debugging mode
-	#app.run(debug=True)
+        # Save the file to ./uploads
+        basepath = os.path.dirname(__file__)
+        file_path = os.path.join(
+            basepath, 'uploads', secure_filename(f.filename))
+        f.save(file_path)
+
+        # Output file path
+        file_output_path = os.path.join(basepath, 'uploads', 'output.png')
+        # Make prediction
+        preds = model_predict(file_path, model)
+
+        # Write to uploads directory
+        cv2.imwrite(file_output_path, preds)
+
+        # Delete uploaded file
+        os.remove(file_path)
+        return file_output_path
+    return None
+
+
+# Callback to grab an image given a local path
+@app.route('/get_image')
+def get_image():
+    path = request.args.get('p')
+    _, ext = os.path.splitext(path)
+    exists = os.path.isfile(path)
+    if exists:
+        return send_file(path, mimetype='image/' + ext[1:])
+
+
+if __name__ == '__main__':
+    # Serve the app with gevent
+    http_server = WSGIServer(('', 80), app)
+    http_server.serve_forever()

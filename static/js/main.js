@@ -1,12 +1,9 @@
-
-  
 $(document).ready(function () {
     // Init
-    console.log("New Script");
     $('.image-section').hide();
     $('.loader').hide();
     $('#result').hide();
-    
+
     // Upload Preview
     function readURL(input) {
         if (input.files && input.files[0]) {
@@ -19,13 +16,6 @@ $(document).ready(function () {
             reader.readAsDataURL(input.files[0]);
         }
     }
-    function showPhoto(img){
-        $('#imagePreview').css('background-image', 'url(' + img + ')');
-        $('#imagePreview').hide();
-        $('#imagePreview').fadeIn(650);
-        
-    }
-    
     $("#imageUpload").change(function () {
         $('.image-section').show();
         $('#btn-predict').show();
@@ -33,9 +23,7 @@ $(document).ready(function () {
         $('#result').hide();
         readURL(this);
     });
-    
-    });
-    
+
     // Predict
     $('#btn-predict').click(function () {
         var form_data = new FormData($('#upload-file')[0]);
@@ -43,7 +31,7 @@ $(document).ready(function () {
         // Show loading animation
         $(this).hide();
         $('.loader').show();
-        console.log(form_data);
+
         // Make prediction by calling api /predict
         $.ajax({
             type: 'POST',
@@ -56,21 +44,13 @@ $(document).ready(function () {
             success: function (data) {
                 // Get and display the result
                 $('.loader').hide();
-                $('#result').fadeIn(600);
-                $('#result').text(' Result:  ' + data.split(" ")[0]);
-                //Show image
-                $('#imagePreview2').css('background-image', 'url(/get_image?p=' + data.split(" ")[1]+ ')');
-                $('#imagePreview2').hide();
-                $('.image-section2').show();
-                $('#imagePreview2').fadeIn(650);
-                
+                $('#imagePreviewResult').css('background-image', 'url(/get_image?p=' + data + ')');
+                $('#imagePreviewResult').hide();
+                $('.image-section-result').show();
+                $('#imagePreviewResult').fadeIn(650); 
+                console.log('Success!');
             },
-            error: function (request, status, error) {
-                alert("Oops: Something went terribly wrong...");
-                $('.loader').hide();
-            }
         });
     });
 
 });
-
