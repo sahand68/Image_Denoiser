@@ -1,1 +1,1 @@
-# Image Denoiser
+# MRI Image Denoiser
